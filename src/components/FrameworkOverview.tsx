@@ -62,7 +62,7 @@ export const FrameworkOverview: React.FC<FrameworkOverviewProps> = ({
         <div className="w-full max-w-none flex flex-col h-full flex-1">
           <div className="mb-3"></div>
 
-          <h1 className="w-full max-w-none text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.15]" style={{ textWrap: 'balance' }}>
+          <h1 className="block w-full max-w-none text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.15]" style={{ textWrap: 'balance' }}>
             Bridging Product Strategy, Deep Architecture & User Experience.
           </h1>
 

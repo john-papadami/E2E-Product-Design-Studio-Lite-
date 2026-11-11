@@ -482,7 +482,7 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono font-semibold uppercase text-slate-600 dark:text-slate-400">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold uppercase tracking-wide bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                     {method.category}
                   </span>
                   <div className="flex items-center gap-1">
@@ -664,10 +664,18 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
             {currentStory.sections.map((sec, idx) => {
               const isSelected = sec.id === currentSection?.id;
               return (
-                <button
+                <div
                   key={sec.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setActiveSectionId(sec.id)}
-                  className={`w-full text-left p-3.5 rounded-xl border transition-all ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setActiveSectionId(sec.id);
+                    }
+                  }}
+                  className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white shadow-sm'
                       : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
@@ -709,7 +717,7 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
                   }`}>
                     {sec.description}
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
