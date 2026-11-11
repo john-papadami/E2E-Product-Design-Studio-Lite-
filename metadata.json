@@ -1,0 +1,6 @@
+{
+  "name": "E2E Product Design Framework",
+  "description": "An interactive strategic workbench based on John Papadami's 5-Story End-to-End Product Design Framework connecting market, customer, technology, user, and success stories across the product lifecycle.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
