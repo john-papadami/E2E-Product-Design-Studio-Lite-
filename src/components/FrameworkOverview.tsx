@@ -26,12 +26,14 @@ interface FrameworkOverviewProps {
   project: ProductProject;
   onNavigateToStory: (storyType: StoryType) => void;
   onNavigateToPhases: () => void;
+  onOpenAiDiscovery: () => void;
 }
 
 export const FrameworkOverview: React.FC<FrameworkOverviewProps> = ({
   project,
   onNavigateToStory,
-  onNavigateToPhases
+  onNavigateToPhases,
+  onOpenAiDiscovery
 }) => {
   const [selectedStory, setSelectedStory] = useState<StoryType>('market');
 
@@ -114,6 +116,16 @@ export const FrameworkOverview: React.FC<FrameworkOverviewProps> = ({
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
               Select any story below to inspect its core thesis, strategic questions, and cross-functional alignment.
             </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={onOpenAiDiscovery}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-xs shrink-0"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>New Product Discovery</span>
+            </button>
           </div>
         </div>
 

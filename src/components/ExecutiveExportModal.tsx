@@ -82,6 +82,31 @@ export const ExecutiveExportModal: React.FC<ExecutiveExportModalProps> = ({
       md += `\n---\n\n`;
     });
 
+    // Design Concepts (if any)
+    if (project.designConcepts && project.designConcepts.length > 0) {
+      md += `## Design Concepts & AI Validation Summary\n\n`;
+      project.designConcepts.forEach((c, idx) => {
+        md += `### Concept ${idx + 1}: ${c.title} [${c.validationStatus.toUpperCase()}${typeof c.validationScore === 'number' ? ` · ${c.validationScore}/100` : ''}]\n\n`;
+        md += `- **Target Use Case:** ${c.targetUseCase}\n`;
+        md += `- **Interaction Model:** ${c.interactionModel}\n`;
+        md += `- **Value Hypothesis:** ${c.valueHypothesis}\n`;
+        if (c.keyFlows.length > 0) {
+          md += `- **Key Flows:** ${c.keyFlows.join(' → ')}\n`;
+        }
+        if (c.strengths.length > 0) {
+          md += `- **Strengths:** ${c.strengths.join('; ')}\n`;
+        }
+        if (c.usabilityRisks.length > 0) {
+          md += `- **Usability Risks:** ${c.usabilityRisks.join('; ')}\n`;
+        }
+        if (c.recommendedTests.length > 0) {
+          md += `- **Recommended Validation Tests:** ${c.recommendedTests.join('; ')}\n`;
+        }
+        md += `\n`;
+      });
+      md += `---\n\n`;
+    }
+
     // Deliverables
     md += `## Lifecycle Phase Deliverables & Verification Gates\n\n`;
     project.deliverables.forEach((d) => {
@@ -247,6 +272,30 @@ export const ExecutiveExportModal: React.FC<ExecutiveExportModalProps> = ({
                   </div>
                 );
               })}
+
+              {project.designConcepts && project.designConcepts.length > 0 && (
+                <div className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-6">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Design Concepts & Validation
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {project.designConcepts.map((c) => (
+                      <div
+                        key={c.id}
+                        className="p-3.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800/60 space-y-1.5 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white">{c.title}</span>
+                          <span className="font-mono text-[10px] uppercase text-indigo-600 dark:text-indigo-400">
+                            {c.validationStatus}{typeof c.validationScore === 'number' ? ` · ${c.validationScore}/100` : ''}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-300 leading-snug">{c.interactionModel}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">

@@ -23,8 +23,21 @@ import {
   ShieldAlert,
   FolderGit2,
   BookOpen,
-  X
+  X,
+  Sparkles,
+  Loader2,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
+import {
+  buildProjectBrief,
+  enrichStoryDimension,
+  generateStoryData,
+  GroundingSource,
+  searchGroundingResearch,
+  summarizeStories
+} from '../services/aiService';
+import { DesignConceptsStudio } from './DesignConceptsStudio';
 
 interface StoryCanvasProps {
   project: ProductProject;
@@ -51,6 +64,24 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
   const [activeSectionId, setActiveSectionId] = useState<string>(
     currentStory.sections[0]?.id || ''
   );
+
+  // Per-story & per-dimension AI generation states
+  const [showStoryAiModal, setShowStoryAiModal] = useState(false);
+  const [storyAiInstructions, setStoryAiInstructions] = useState('');
+  const [storyAiMode, setStoryAiMode] = useState<'replace' | 'append'>('replace');
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+  const [storyAiError, setStoryAiError] = useState<string | null>(null);
+  const [isEnrichingDimension, setIsEnrichingDimension] = useState(false);
+
+  // Google Search Grounding Research modal states
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResult, setSearchResult] = useState<{
+    summary: string;
+    sources: GroundingSource[];
+  } | null>(null);
 
   const storyIcons: Record<StoryType, React.ReactNode> = {
     market: <TrendingUp className="w-4 h-4 text-indigo-500" />,
@@ -311,9 +342,137 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
     });
   };
 
+  const handleGenerateStoryWithAi = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isGeneratingStory) return;
+
+    setIsGeneratingStory(true);
+    setStoryAiError(null);
+    try {
+      const generated = await generateStoryData({
+        projectBrief: buildProjectBrief(project),
+        storyType: activeStoryType,
+        customInstructions: storyAiInstructions.trim() || undefined,
+        existingStoriesSummary: summarizeStories(project.stories, activeStoryType)
+      });
+
+      const updatedStory: StoryDefinition =
+        storyAiMode === 'append'
+          ? {
+              ...currentStory,
+              sections: [...currentStory.sections, ...generated.sections],
+              uxMethodologies: [
+                ...(currentStory.uxMethodologies || []),
+                ...generated.uxMethodologies
+              ]
+            }
+          : generated;
+
+      onUpdateProject({
+        ...project,
+        lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        stories: {
+          ...project.stories,
+          [activeStoryType]: updatedStory
+        }
+      });
+
+      if (storyAiMode === 'replace') {
+        setSubtitleValue(updatedStory.subtitle);
+        setObjectiveValue(updatedStory.objective);
+        setActiveSectionId(updatedStory.sections[0]?.id || '');
+      } else if (generated.sections[0]?.id) {
+        setActiveSectionId(generated.sections[0].id);
+      }
+
+      setStoryAiInstructions('');
+      setShowStoryAiModal(false);
+    } catch (err) {
+      setStoryAiError(err instanceof Error ? err.message : 'Failed to generate story data.');
+    } finally {
+      setIsGeneratingStory(false);
+    }
+  };
+
+  const handleEnrichCurrentDimension = async () => {
+    if (!currentSection || isEnrichingDimension) return;
+    setIsEnrichingDimension(true);
+    setStoryAiError(null);
+    try {
+      const enriched = await enrichStoryDimension({
+        projectBrief: buildProjectBrief(project),
+        storyType: activeStoryType,
+        section: currentSection
+      });
+
+      const updatedSections = currentStory.sections.map((sec) =>
+        sec.id === currentSection.id ? { ...sec, ...enriched } : sec
+      );
+
+      onUpdateProject({
+        ...project,
+        lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        stories: {
+          ...project.stories,
+          [activeStoryType]: {
+            ...currentStory,
+            sections: updatedSections
+          }
+        }
+      });
+    } catch (err) {
+      setStoryAiError(err instanceof Error ? err.message : 'Failed to enrich dimension.');
+    } finally {
+      setIsEnrichingDimension(false);
+    }
+  };
+
   const currentSection =
     currentStory.sections.find((s) => s.id === activeSectionId) ||
     currentStory.sections[0];
+
+  const openWebResearchModal = () => {
+    const defaultQueries: Record<StoryType, string> = {
+      market: `Current market size, key competitors, and differentiation trends for ${project.name} in ${project.domain}`,
+      customer: `Top organizational buyer pain points, procurement blockers, and willingness-to-pay benchmarks in ${project.domain}`,
+      technology: `Current architecture best practices, security/compliance standards, and latency SLAs for ${project.domain}`,
+      user: `Modern UX patterns, accessibility benchmarks, and workflow best practices for ${project.targetAudience}`,
+      success: `Industry SaaS & product KPI benchmarks, adoption rates, and ROI metrics for ${project.domain}`,
+    };
+    setSearchQuery(defaultQueries[activeStoryType]);
+    setSearchError(null);
+    setShowSearchModal(true);
+  };
+
+  const handleRunWebSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim() || isSearching) return;
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const res = await searchGroundingResearch({
+        query: searchQuery.trim(),
+        storyType: activeStoryType,
+        projectBrief: buildProjectBrief(project)
+      });
+      setSearchResult(res);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Failed to run Google Search research.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleAppendSearchToDimension = () => {
+    if (!searchResult || !currentSection) return;
+    const sourcesNote =
+      searchResult.sources.length > 0
+        ? `\n\nSources:\n${searchResult.sources.slice(0, 5).map((s) => `- ${s.title}: ${s.uri}`).join('\n')}`
+        : '';
+    const updatedContent = `${currentSection.content}\n\n[Live Google Search Research]\n${searchResult.summary}${sourcesNote}`;
+    handleUpdateSectionContent(currentSection.id, updatedContent);
+    setShowSearchModal(false);
+  };
 
   return (
     <div className="space-y-8">
@@ -423,17 +582,58 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
             )}
           </div>
 
-          <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs shrink-0 max-w-xs">
-            <div className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <HelpCircle className="w-3.5 h-3.5" />
-              <span>Core Guiding Question</span>
+          <div className="flex flex-col gap-2.5 shrink-0 max-w-xs">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStoryAiError(null);
+                  setShowStoryAiModal(true);
+                }}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-xs whitespace-nowrap"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AI Generate {overview.title}</span>
+              </button>
+              <button
+                type="button"
+                onClick={openWebResearchModal}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-emerald-600 text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors whitespace-nowrap"
+                title="Research live market & web insights using Google Search"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Web Search</span>
+              </button>
             </div>
-            <p className="text-slate-600 dark:text-slate-400 mt-1 italic leading-snug">
-              "{overview.coreQuestion}"
-            </p>
+
+            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs">
+              <div className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Core Guiding Question</span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 mt-1 italic leading-snug">
+                "{overview.coreQuestion}"
+              </p>
+            </div>
           </div>
         </div>
       </div>
+
+      {storyAiError && !showStoryAiModal && (
+        <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{storyAiError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStoryAiError(null)}
+            className="p-1 hover:text-rose-900 dark:hover:text-rose-100"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Applied UX Methodologies Section */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-sm">
@@ -782,17 +982,34 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
                 </p>
               </div>
 
-              {currentStory.sections.length > 1 && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => handleDeleteSection(currentSection.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-lg transition-colors shrink-0 border border-rose-200 dark:border-rose-900/60"
-                  title="Delete this dimension"
+                  onClick={handleEnrichCurrentDimension}
+                  disabled={isEnrichingDimension}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-lg transition-colors border border-indigo-200 dark:border-indigo-800/60 disabled:opacity-50"
+                  title="Synthesize deeper insights, questions, and risks with AI"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete Dimension</span>
+                  {isEnrichingDimension ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isEnrichingDimension ? 'Enriching...' : 'AI Enrich Dimension'}</span>
                 </button>
-              )}
+
+                {currentStory.sections.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSection(currentSection.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-lg transition-colors border border-rose-200 dark:border-rose-900/60"
+                    title="Delete this dimension"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Dimension</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Main Content Area */}
@@ -937,6 +1154,234 @@ export const StoryCanvas: React.FC<StoryCanvasProps> = ({
           </div>
         )}
       </div>
+
+      {/* Design Concepts & Validation Lab (Step 6) inside User Story */}
+      {activeStoryType === 'user' && (
+        <DesignConceptsStudio project={project} onUpdateProject={onUpdateProject} />
+      )}
+
+      {/* AI Generate Story Modal */}
+      {showStoryAiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+          <form
+            onSubmit={handleGenerateStoryWithAi}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-xl"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-500" />
+                <span>AI Generate {overview.title} Data</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowStoryAiModal(false)}
+                disabled={isGeneratingStory}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Synthesize dimensions, validation questions, deliverables, risks, UX methodologies, and alignment checks for{' '}
+              <strong className="text-slate-900 dark:text-white">{project.name}</strong> grounded in your other stories.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300 mb-1">
+                  Update Mode
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStoryAiMode('replace')}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition-colors ${
+                      storyAiMode === 'replace'
+                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-semibold'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    <div>Replace Story Data</div>
+                    <div className="text-[10px] font-normal opacity-80">Fresh synthesis for this story</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStoryAiMode('append')}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition-colors ${
+                      storyAiMode === 'append'
+                        ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-semibold'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    <div>Append New Dimensions</div>
+                    <div className="text-[10px] font-normal opacity-80">Keep existing & add new angles</div>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300 mb-1">
+                  Optional Focus or Constraints
+                </label>
+                <textarea
+                  value={storyAiInstructions}
+                  onChange={(e) => setStoryAiInstructions(e.target.value)}
+                  rows={3}
+                  disabled={isGeneratingStory}
+                  placeholder="e.g., Focus on SMB self-serve onboarding, EU GDPR compliance, or competitor pricing gaps..."
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {storyAiError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300">
+                  {storyAiError}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowStoryAiModal(false)}
+                disabled={isGeneratingStory}
+                className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isGeneratingStory}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50"
+              >
+                {isGeneratingStory ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Generating {overview.title}...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Generate Data</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Google Search Grounding Web Research Modal */}
+      {showSearchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl p-6 space-y-4 shadow-xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Globe className="w-4 h-4 text-emerald-500" />
+                <span>Live Google Search Research ({overview.title})</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSearchModal(false)}
+                disabled={isSearching}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRunWebSearch} className="flex gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Ask for up-to-date market size, competitors, regulations, or UX benchmarks..."
+                className="flex-1 text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                disabled={isSearching || !searchQuery.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 shrink-0"
+              >
+                {isSearching ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Searching...</span>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>Search Web</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {searchError && (
+              <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300">
+                {searchError}
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto space-y-4">
+              {searchResult ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                    {searchResult.summary}
+                  </div>
+
+                  {searchResult.sources.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                        Verified Web Sources ({searchResult.sources.length})
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {searchResult.sources.map((src, sIdx) => (
+                          <a
+                            key={sIdx}
+                            href={src.uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline max-w-xs truncate"
+                            title={src.title}
+                          >
+                            <span className="truncate">{src.title}</span>
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                  Enter a query and click <strong>Search Web</strong> to pull live, grounded industry insights via Gemini + Google Search.
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSearchModal(false)}
+                className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              >
+                Close
+              </button>
+              {searchResult && currentSection && (
+                <button
+                  type="button"
+                  onClick={handleAppendSearchToDimension}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
+                >
+                  <span>Append Findings to "{currentSection.title}"</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

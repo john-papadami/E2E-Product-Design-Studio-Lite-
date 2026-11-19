@@ -13,6 +13,8 @@ import { AlignmentMatrix } from './components/AlignmentMatrix';
 import { PhaseRoadmap } from './components/PhaseRoadmap';
 import { ExecutiveExportModal } from './components/ExecutiveExportModal';
 import { NewProjectModal } from './components/NewProjectModal';
+import { AIDiscoveryModal } from './components/AIDiscoveryModal';
+import { AIChatDrawer } from './components/AIChatDrawer';
 
 export default function App() {
   // Theme state
@@ -73,9 +75,11 @@ export default function App() {
   // Currently focused story inside the Story Canvas
   const [activeStoryType, setActiveStoryType] = useState<StoryType>('market');
 
-  // Modals
+  // Modals & Drawers
   const [showExportModal, setShowExportModal] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showAiDiscoveryModal, setShowAiDiscoveryModal] = useState(false);
+  const [showChatDrawer, setShowChatDrawer] = useState(false);
 
   // Navigation helpers
   const handleNavigateToStory = (storyType: StoryType) => {
@@ -112,6 +116,7 @@ export default function App() {
             project={project}
             onNavigateToStory={handleNavigateToStory}
             onNavigateToPhases={handleNavigateToPhases}
+            onOpenAiDiscovery={() => setShowAiDiscoveryModal(true)}
           />
         )}
 
@@ -188,6 +193,29 @@ export default function App() {
         isOpen={showNewProjectModal}
         onClose={() => setShowNewProjectModal(false)}
         onSelectProject={(newProj) => handleUpdateProject(newProj)}
+        onOpenAiDiscovery={() => setShowAiDiscoveryModal(true)}
+      />
+
+      <AIDiscoveryModal
+        isOpen={showAiDiscoveryModal}
+        onClose={() => setShowAiDiscoveryModal(false)}
+        onProjectGenerated={(newProj, initialStory) => {
+          handleUpdateProject(newProj);
+          if (initialStory) {
+            setActiveStoryType(initialStory);
+            setActiveTab('canvas');
+          } else {
+            setActiveTab('blueprint');
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
+
+      <AIChatDrawer
+        project={project}
+        activeStoryType={activeStoryType}
+        isOpen={showChatDrawer}
+        onToggleOpen={setShowChatDrawer}
       />
     </div>
   );

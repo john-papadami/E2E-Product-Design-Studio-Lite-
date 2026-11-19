@@ -55,12 +55,27 @@ export interface PhaseDeliverable {
   ownerRole: StakeholderRole;
 }
 
+export interface DesignConcept {
+  id: string;
+  title: string;
+  targetUseCase: string;
+  interactionModel: string;
+  keyFlows: string[];
+  valueHypothesis: string;
+  validationScore?: number;
+  validationStatus: 'draft' | 'validated' | 'needs_revision';
+  strengths: string[];
+  usabilityRisks: string[];
+  recommendedTests: string[];
+}
+
 export interface ProductProject {
   id: string;
   name: string;
   domain: string;
   targetAudience: string;
   visionStatement: string;
+  aiDiscoveryBrief?: string;
   lastUpdated: string;
   stories: {
     market: StoryDefinition;
@@ -69,5 +84,6 @@ export interface ProductProject {
     user: StoryDefinition;
     success: StoryDefinition;
   };
+  designConcepts?: DesignConcept[];
   deliverables: PhaseDeliverable[];
 }

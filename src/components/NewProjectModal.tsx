@@ -13,13 +13,15 @@ interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectProject: (project: ProductProject) => void;
+  onOpenAiDiscovery?: () => void;
 }
 
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   currentProjectId,
   isOpen,
   onClose,
-  onSelectProject
+  onSelectProject,
+  onOpenAiDiscovery
 }) => {
   const [activeTab, setActiveTab] = useState<'templates' | 'custom'>('templates');
 
@@ -234,6 +236,19 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
           >
             Create Custom Initiative
           </button>
+          {onOpenAiDiscovery && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenAiDiscovery();
+              }}
+              className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-md font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Generate with AI</span>
+            </button>
+          )}
         </div>
 
         {/* Content */}
